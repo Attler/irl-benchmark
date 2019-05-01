@@ -1,4 +1,4 @@
-    
+
 """Module for maximum entropy inverse reinforcement learning."""
 
 from typing import Callable, Dict, List
