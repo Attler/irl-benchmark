@@ -6,25 +6,25 @@ from typing import Callable, Dict, List
 import gym
 import numpy as np
 from irl_benchmark.rl.model.model_wrapper import BaseWorldModelWrapper
-from irl_benchmark.utils.wrapper import unwrap_env
+from irl_benchmark.utils.wrapper import unwrap_env, is_unwrappable_to
 from irl_benchmark.cirl import cirl_wrapper
 from math import inf
-import tqdm
+from tqdm import tqdm
 
 # Type Alias
 Trajectory = Dict[str, list]
-Trajectories = List[Trajectories]
+Trajectories = List[Trajectory]
 
 class BaseCIRLAlgorithm():
 
     def __init__(self, env: gym.Env):
         self.env = env
 
-    def cirl_trajectories(self, expected_features: np.ndarray): -> Trajectories
+    def cirl_trajectories(self, expected_features: np.ndarray) -> Trajectories:
         raise NotImplimentedError()
 
 
-class ExaustiveSearchCIRL(BaseIRLAlgorithm):
+class ExhaustiveSearchCIRL(BaseCIRLAlgorithm):
     """
     Exhausitvely search all trajectories, find the best one by the CIRL
     objective formula.
@@ -32,36 +32,37 @@ class ExaustiveSearchCIRL(BaseIRLAlgorithm):
 
     def __init__(self, env: gym.Env):
         """See :class:`irl_benchmark.irl.algorithms.base_algorithm.BaseIRLAlgorithm`."""
-        assert is_unwrappable_to(env, BaseWorldModelWrapper)
-        super(ExaustiveSearchCIRL, self).__init__(env)
-
-        self.model_wrapper = unwrap_env(env, BaseWorldModelWrapper)
-
-        self.no_states = self.model_wrapper.n_states()
-        self.no_actions = env.action_space.n
-
+        super(ExhaustiveSearchCIRL, self).__init__(env)
         self.env = env
 
-    def cirl_trajectory(self, expected_features):
+    def cirl_trajectory(self, expected_features, limit=None):
+        actions = np.arange(self.env.action_space.n)
+        trajs = self._cartesian_product(*[actions for _ in range(10)])
 
-        trajs = _cartesian_product( *[np.arange(env.action_space.n) for _ in range(10)])
-
-        cirl_env = cirl_wrapper(self.env, expected_features)
+        if limit is not None:
+            trajs = trajs[:limit]
+        cirl_env = cirl_wrapper.CIRLRewards(self.env, expected_features)
         r = lambda t: self.cirl_reward(cirl_env, t)
 
-        return max(trajs, key=r)
+        rewards = np.zeros(len(trajs))
+        for i, t in enumerate(tqdm(trajs)):
+            rewards[i] = self.cirl_reward(cirl_env, t)
 
-    def cirl_reward(cirl_env : gym.Env, traj : np.ndarray) -> int:
+        print(np.amax(rewards))
+        return trajs[int(np.amax(rewards))]
+
+    def cirl_reward(self, cirl_env : gym.Env, traj : np.ndarray) -> float:
         cirl_env.reset()
+
+        reward: float
         for a in traj:
-            _ , reward, terminated, _ = cirl_env.step()
+            _ , reward, terminated, _ = cirl_env.step(a)
             if terminated:
                 return reward
 
-        # Trajectory didn't terminate :(
-        return - inf
+        return reward
 
-    def _cartesian_product(*arrays):
+    def _cartesian_product(self,*arrays):
         """
         From https://stackoverflow.com/a/11146645
         """
