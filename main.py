@@ -10,9 +10,9 @@ from irl_benchmark.metrics.feature_count_l2 import FeatureCount2Loss
 from irl_benchmark.metrics.feature_count_inf import FeatureCountInfLoss
 from irl_benchmark.rl.algorithms import ValueIteration
 
-env_id = 'MazeWorld0-v0'
+env_id = 'FrozenLake-v0'
 
-expert_trajs_path = 'data/maze0/expert_human'
+expert_trajs_path = 'data/frozen/expert'
 
 metrics = [AverageTrajectoryReturn, FeatureCount2Loss, FeatureCountInfLoss]
 
