@@ -13,14 +13,10 @@ class CIRLRewards(gym.Wrapper):
     distribution of the expert policy.
 
     The enviroment should return a feature vector in the info dictionary.
-     """
-
+    """
 
     def __init__(self, env: gym.Env, expert_features):
         """
-
-        Parameters
-        ----------
         env: gym.Env
             The gym environment to be wrapped.
 
@@ -47,6 +43,9 @@ class CIRLRewards(gym.Wrapper):
 
         return next_state, reward, terminated, info
 
+    def reset(self):
+        self.feature_trajectory = np.empty((0,d))
+        return self.env.reset()
 
     def feature_dist(self):
         """ Returns the l2 distance of the average features for the current
