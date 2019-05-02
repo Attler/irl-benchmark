@@ -36,20 +36,24 @@ class ExhaustiveSearchCIRL(BaseCIRLAlgorithm):
         self.env = env
 
     def cirl_trajectory(self, expected_features, limit=None):
+        """ Finds the most pedalogical trajectory, as defined by equation (1)
+        in the CIRL paper.  This trajectory maximizes reward while being close
+        to the expected feature values for the expert policy.
+        """
+
         actions = np.arange(self.env.action_space.n)
         trajs = self._cartesian_product(*[actions for _ in range(10)])
 
         if limit is not None:
             trajs = trajs[:limit]
-        cirl_env = cirl_wrapper.CIRLRewards(self.env, expected_features)
-        r = lambda t: self.cirl_reward(cirl_env, t)
 
         rewards = np.zeros(len(trajs))
         for i, t in enumerate(tqdm(trajs)):
             rewards[i] = self.cirl_reward(cirl_env, t)
 
-        print(np.amax(rewards))
-        return trajs[int(np.amax(rewards))]
+        print(np.argmax(rewards))
+
+        return trajs[np.argmax(rewards)]
 
     def cirl_reward(self, cirl_env : gym.Env, traj : np.ndarray) -> float:
         cirl_env.reset()
@@ -60,7 +64,7 @@ class ExhaustiveSearchCIRL(BaseCIRLAlgorithm):
             if terminated:
                 return reward
 
-        return reward
+        return reward - cirl_env.feature_dist()
 
     def _cartesian_product(self,*arrays):
         """

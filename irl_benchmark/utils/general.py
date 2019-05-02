@@ -40,6 +40,6 @@ def to_one_hot(hot_vals: Union[int, List[int], np.ndarray],
         res = zeros_function((n_rows, max_val))
         res[np.arange(n_rows), hot_vals] = 1.
     except TypeError:
-        res = zeros_function((max_val, ))
-        res[hot_vals] = 1.
+        res = zeros_function((1,max_val))
+        res[0][hot_vals] = 1.
     return res

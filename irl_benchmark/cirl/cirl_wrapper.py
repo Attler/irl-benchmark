@@ -1,10 +1,13 @@
 import gym
 import numpy as np
 from gym.envs.registration import register
+from gym import spaces
 
 import irl_benchmark
 import irl_benchmark.irl.feature.feature_wrapper as feature_wrapper
 from irl_benchmark.utils.wrapper import is_unwrappable_to
+
+from irl_benchmark.utils.general import to_one_hot
 
 
 class CIRLRewards(gym.Wrapper):
@@ -15,7 +18,7 @@ class CIRLRewards(gym.Wrapper):
     The enviroment should return a feature vector in the info dictionary.
     """
 
-    def __init__(self, env: gym.Env, expert_features):
+    def __init__(self, env: gym.Env, expert_features, traj_state = False):
         """
         env: gym.Env
             The gym environment to be wrapped.
@@ -29,30 +32,57 @@ class CIRLRewards(gym.Wrapper):
         self.d = env.feature_dimensionality()[0]
 
         assert is_unwrappable_to(env, feature_wrapper.FeatureWrapper)
-        assert len(self.expert_features) == self.d
+        assert self.expert_features.shape[1] == self.d
 
         self.feature_trajectory = np.empty((0,self.d))
+
+        self.traj_state = traj_state
+        self.obs_n = self.observation_space.n
+
+        if self.traj_state:
+            self.observation_space = spaces.Box(0, 1,
+                shape=(self.obs_n + self.d,),
+                dtype=np.float32)
 
     def step(self, action):
         next_state, reward, terminated, info = self.env.step(action)
         f = info["features"]
 
-        self.feature_trajectory = np.append(self.feature_trajectory, f)
+        self.feature_trajectory = np.concatenate(
+            (self.feature_trajectory, f), axis=0)
 
         if terminated:
             reward -= self.feature_dist()
 
-        return next_state, reward, terminated, info
+        if self.traj_state:
+            next_state = self.traj_state_vector(next_state)
+        return next_state, reward, terminated, {}
+
+    def traj_state_vector(self, state):
+        return np.append(
+            to_one_hot(state, self.obs_n),
+            self.avg_traj()
+        )
 
     def reset(self):
         self.feature_trajectory = np.empty((0,self.d))
-        return self.env.reset()
+        s = self.env.reset()
+        if self.traj_state:
+            s = self.traj_state_vector(s)
+        return s
 
-    def feature_dist(self):
+    def avg_traj(self):
+        """ Returns ndarray of size (d,) corresponding to the average features
+        across the current trajectory
+        """
+        if self.feature_trajectory.shape[0]:
+            return self.feature_trajectory.mean(axis=0)
+        else:
+            return np.zeros(self.d,)
+
+    def feature_dist(self, eta=.01):
         """ Returns the l2 distance of the average features for the current
         trajectory and the expert features.
         """
-
-        trajectory_average_features = self.feature_trajectory.mean(axis=0)
-        dist_vec = trajectory_average_features - self.expert_features
-        return np.linalg.norm(dist_vec, ord=2)
+        dist_vec = self.avg_traj() - self.expert_features
+        return eta * np.linalg.norm(dist_vec, ord=2)
